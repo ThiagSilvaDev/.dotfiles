@@ -16,6 +16,7 @@ PACKAGES=(
     "fastfetch"
     "foot"
     "code"
+    "bat"
 )
 
 # VS Code
