@@ -18,8 +18,8 @@ readonly FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.
 
 # Pacotes DNF (incluindo dependências do script como git/unzip e do Docker)
 readonly DNF_PACKAGES=(
-    "curl" "wget" "neovim" "zsh" "tmux" "btop" "stow" "fzf" "ripgrep"
-    "fastfetch" "foot" "code" "bat" "git" "unzip" "dnf-plugins-core"
+    "curl" "wget" "zsh" "tmux" "btop" "stow" "fzf" "ripgrep"
+    "fastfetch" "foot" "bat" "git" "unzip" "dnf-plugins-core"
     "docker-ce" "docker-ce-cli" "containerd.io" "docker-buildx-plugin"
     "docker-compose-plugin"
 )
@@ -53,18 +53,7 @@ log_error() {
 
 setup_repositories() {
     log_info "Configurando repositórios DNF..."
-    local vscode_repo="/etc/yum.repos.d/vscode.repo"
     local docker_repo="/etc/yum.repos.d/docker-ce.repo"
-
-    # VS Code
-    if [ ! -f "$vscode_repo" ]; then
-        log_info "Adicionando repositório do VS Code..."
-        sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-        echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee "$vscode_repo" > /dev/null
-        log_success "Repositório VS Code adicionado."
-    else
-        log_info "Repositório VS Code já existe."
-    fi
 
     # Docker
     if [ ! -f "$docker_repo" ]; then
