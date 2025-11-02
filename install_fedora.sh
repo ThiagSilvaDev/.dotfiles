@@ -18,7 +18,7 @@ readonly FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.
 
 # Pacotes DNF (incluindo dependências do script como git/unzip e do Docker)
 readonly DNF_PACKAGES=(
-    "curl" "wget" "zsh" "tmux" "btop" "stow" "fzf" "ripgrep"
+    "curl" "wget" "zsh" "tmux" "btop" "stow" "fzf" "ripgrep" "ranger"
     "fastfetch" "foot" "bat" "git" "unzip" "dnf-plugins-core"
     "docker-ce" "docker-ce-cli" "containerd.io" "docker-buildx-plugin"
     "docker-compose-plugin"
@@ -37,17 +37,21 @@ readonly COLOR_GREEN="\033[0;32m"
 readonly COLOR_YELLOW="\033[0;33m"
 readonly COLOR_RED="\033[0;31m"
 
-log_info() {
-    echo -e "${COLOR_YELLOW}[INFO] $1${COLOR_RESET}"
+log() {
+    local level="$1"; shift
+    local color label
+    case "$level" in
+        INFO)    color="$COLOR_YELLOW"; label="INFO" ;;
+        SUCCESS) color="$COLOR_GREEN";  label="SUCCESS" ;;
+        ERROR)   color="$COLOR_RED";    label="ERROR" ;;
+        *)       color="$COLOR_RESET";  label="$level" ;;
+    esac
+    printf "%b[%s] %s%b\n" "$color" "$label" "$*" "$COLOR_RESET"
 }
 
-log_success() {
-    echo -e "${COLOR_GREEN}[SUCCESS] $1${COLOR_RESET}"
-}
-
-log_error() {
-    echo -e "${COLOR_RED}[ERROR] $1${COLOR_RESET}"
-}
+log_info()    { log INFO "$*"; }
+log_success() { log SUCCESS "$*"; }
+log_error()   { log ERROR "$*"; }
 
 # --- Funções de Instalação ---
 
@@ -58,14 +62,14 @@ setup_repositories() {
     # Docker
     if [ ! -f "$docker_repo" ]; then
         log_info "Adicionando repositório do Docker..."
-        sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+        sudo dnf -y install dnf-plugins-core
+        sudo dnf-3 config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
         log_success "Repositório Docker adicionado."
     else
         log_info "Repositório Docker já existe."
     fi
 
     log_info "Atualizando cache do DNF..."
-    sudo dnf check-update
 }
 
 install_dnf_packages() {
@@ -97,73 +101,56 @@ setup_docker() {
     fi
 }
 
-# NOVO: Define ZDOTDIR para que o zsh use o diretório XDG
-setup_zsh_environment() {
-    log_info "Configurando ambiente Zsh (ZDOTDIR)..."
-    local zshenv_file="$HOME/.zshenv"
-    # Este é o caminho padrão XDG para configs do zsh
-    local zdotdir_line="export ZDOTDIR=\"${XDG_CONFIG_HOME}/zsh\""
-
-    # .zshenv é lido antes do .zshrc, sendo o local ideal para definir ZDOTDIR
-    if ! grep -qF "$zdotdir_line" "$zshenv_file" 2>/dev/null; then
-        log_info "Adicionando ZDOTDIR ao $zshenv_file..."
-        echo -e "\n# Define o diretório de configuração do Zsh (XDG)\n$zdotdir_line" >> "$zshenv_file"
-        log_success "$zshenv_file atualizado."
-    else
-        log_info "$zshenv_file já está configurado."
-    fi
-}
-
-# MODIFICADO: Instala o Oh My Zsh nos caminhos XDG
 setup_zsh() {
     log_info "Configurando Zsh, Oh My Zsh (XDG) e plugins..."
     local zsh_path
     zsh_path=$(which zsh)
 
     # Define os caminhos XDG para o Oh My Zsh
-    # $ZSH -> Onde o Oh My Zsh será instalado (dados)
-    # $ZSH_CUSTOM -> Onde os plugins e temas customizados ficarão (config)
-    export ZSH="${XDG_DATA_HOME}/oh-my-zsh"
-    export ZSH_CUSTOM="${XDG_CONFIG_HOME}/oh-my-zsh/custom"
+    local omz_dir="${XDG_DATA_HOME}/oh-my-zsh"
+    local omz_custom="${XDG_CONFIG_HOME}/oh-my-zsh/custom"
 
     # Instala Oh My Zsh
-    if [ ! -d "$ZSH" ]; then
-        log_info "Instalando Oh My Zsh em $ZSH..."
-        # Passamos ZSH e ZSH_CUSTOM como variáveis de ambiente para o instalador
-        sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    if [ ! -d "$omz_dir" ]; then
+        log_info "Instalando Oh My Zsh em $omz_dir..."
+
+        # Baixa o instalador
+        local installer="/tmp/omz_install.sh"
+        curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh -o "$installer"
+
+        # Instala com variáveis de ambiente corretas
+        RUNZSH=no ZSH="$omz_dir" sh "$installer" --unattended
+
+        rm -f "$installer"
         log_success "Oh My Zsh instalado."
     else
         log_info "Oh My Zsh já está instalado."
     fi
 
-    # Define os caminhos de plugins e temas baseados em ZSH_CUSTOM
-    local custom_plugins="${ZSH_CUSTOM}/plugins"
-    local custom_themes="${ZSH_CUSTOM}/themes"
-
-    # Garante que os diretórios customizados existam
-    mkdir -p "$custom_plugins"
-    mkdir -p "$custom_themes"
+    # Cria o diretório custom se não existir
+    mkdir -p "$omz_custom/plugins"
+    mkdir -p "$omz_custom/themes"
 
     # Plugin: zsh-autosuggestions
-    if [ ! -d "$custom_plugins/zsh-autosuggestions" ]; then
+    if [ ! -d "$omz_custom/plugins/zsh-autosuggestions" ]; then
         log_info "Instalando zsh-autosuggestions..."
-        git clone https://github.com/zsh-users/zsh-autosuggestions "$custom_plugins/zsh-autosuggestions"
+        git clone https://github.com/zsh-users/zsh-autosuggestions "$omz_custom/plugins/zsh-autosuggestions"
     else
         log_info "Plugin zsh-autosuggestions já existe."
     fi
 
     # Plugin: zsh-syntax-highlighting
-    if [ ! -d "$custom_plugins/zsh-syntax-highlighting" ]; then
+    if [ ! -d "$omz_custom/plugins/zsh-syntax-highlighting" ]; then
         log_info "Instalando zsh-syntax-highlighting..."
-        git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$custom_plugins/zsh-syntax-highlighting"
+        git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$omz_custom/plugins/zsh-syntax-highlighting"
     else
         log_info "Plugin zsh-syntax-highlighting já existe."
     fi
 
     # Tema: Powerlevel10k
-    if [ ! -d "$custom_themes/powerlevel10k" ]; then
+    if [ ! -d "$omz_custom/themes/powerlevel10k" ]; then
         log_info "Instalando tema Powerlevel10k..."
-        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$custom_themes/powerlevel10k"
+        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$omz_custom/themes/powerlevel10k"
     else
         log_info "Tema Powerlevel10k já existe."
     fi
@@ -190,38 +177,96 @@ install_fonts() {
     log_info "Instalando Nerd Fonts ($FONT_NAME)..."
     local font_target_dir="$FONT_DIR/$FONT_NAME"
 
-    if [ ! -d "$font_target_dir" ]; then
-        mkdir -p "$font_target_dir"
-        local tmp_zip="/tmp/${FONT_NAME}.zip"
+    # Remove instalação anterior para garantir limpeza
+    if [ -d "$font_target_dir" ]; then
+        log_info "Removendo instalação anterior..."
+        rm -rf "$font_target_dir"
+    fi
 
-        log_info "Baixando fontes..."
-        wget -O "$tmp_zip" "$FONT_URL"
+    mkdir -p "$font_target_dir"
+    local tmp_zip="/tmp/${FONT_NAME}.zip"
 
-        log_info "Extraindo fontes..."
-        unzip -q "$tmp_zip" -d "$font_target_dir"
+    log_info "Baixando fontes de $FONT_URL..."
+    if ! wget -q --show-progress -O "$tmp_zip" "$FONT_URL"; then
+        log_error "Falha ao baixar as fontes."
+        return 1
+    fi
 
-        rm "$tmp_zip"
+    log_info "Extraindo fontes em $font_target_dir..."
+    if ! unzip -q "$tmp_zip" -d "$font_target_dir"; then
+        log_error "Falha ao extrair as fontes."
+        rm -f "$tmp_zip"
+        return 1
+    fi
 
-        log_info "Atualizando cache de fontes..."
-        fc-cache -fv
-        log_success "Fonte $FONT_NAME instalada."
+    rm -f "$tmp_zip"
+
+    # Remove arquivos desnecessários (apenas mantém .ttf e .otf)
+    find "$font_target_dir" -type f ! \( -name '*.ttf' -o -name '*.otf' \) -delete
+
+    # Conta quantos arquivos de fonte foram instalados
+    local font_count
+    font_count=$(find "$font_target_dir" -name '*.ttf' -o -name '*.otf' | wc -l)
+
+    if [ "$font_count" -eq 0 ]; then
+        log_error "Nenhuma fonte foi extraída. Verifique a URL."
+        return 1
+    fi
+
+    log_info "Atualizando cache de fontes..."
+    fc-cache -fv "$font_target_dir" > /dev/null 2>&1
+
+    log_success "Fonte $FONT_NAME instalada ($font_count arquivos)."
+    log_info "Verificando instalação..."
+
+    # Verifica se a fonte está disponível
+    if fc-list | grep -qi "JetBrainsMono"; then
+        log_success "Fonte JetBrainsMono confirmada no sistema."
+        log_info "Configure seu terminal para usar: 'JetBrainsMono Nerd Font' ou 'JetBrainsMonoNL Nerd Font Mono'"
     else
-        log_info "Fonte $FONT_NAME já parece estar instalada."
+        log_error "Fonte instalada mas não detectada pelo fc-list. Pode ser necessário reiniciar o terminal."
     fi
 }
 
 link_dotfiles() {
     log_info "Criando links simbólicos com 'stow'..."
-    # Este comando 'stow .' assume que seu repositório está estruturado
-    # para espelhar o $HOME, contendo pastas como '.config', '.local', etc.
-    if command -v stow &> /dev/null; then
-        if stow .; then
-            log_success "Dotfiles linkados."
-        else
-            log_error "Falha ao linkar dotfiles com 'stow'."
+
+    if ! command -v stow &> /dev/null; then
+        log_error "'stow' não encontrado. Pulando link de dotfiles."
+        return
+    fi
+
+    # Backup de arquivos existentes que causariam conflito
+    local conflicts=(
+        "$HOME/.zshrc"
+        "$HOME/.bashrc"
+        "$HOME/.tmux.conf"
+        "$HOME/.config/foot"
+        "$HOME/.config/ranger"
+    )
+
+    local backup_dir="$HOME/.dotfiles_backup_$(date +%Y%m%d_%H%M%S)"
+    local has_conflicts=false
+
+    for file in "${conflicts[@]}"; do
+        if [ -e "$file" ] && [ ! -L "$file" ]; then
+            if [ "$has_conflicts" = false ]; then
+                log_info "Encontrados arquivos conflitantes. Criando backup em $backup_dir..."
+                mkdir -p "$backup_dir"
+                has_conflicts=true
+            fi
+            log_info "Movendo $(basename "$file") para backup..."
+            mv "$file" "$backup_dir/"
+        fi
+    done
+
+    if stow --verbose=1 .; then
+        log_success "Dotfiles linkados."
+        if [ "$has_conflicts" = true ]; then
+            log_info "Arquivos originais salvos em: $backup_dir"
         fi
     else
-        log_error "'stow' não encontrado. Pulando link de dotfiles."
+        log_error "Falha ao linkar dotfiles com 'stow'."
     fi
 }
 
@@ -242,7 +287,6 @@ main() {
     install_dnf_packages
     install_flatpaks
     setup_docker
-    setup_zsh_environment # NOVO: Deve vir antes de setup_zsh
     setup_zsh
     install_fonts
     link_dotfiles
