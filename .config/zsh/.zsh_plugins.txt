@@ -1,0 +1,6 @@
+getantidote/use-omz
+ohmyzsh/ohmyzsh path:lib
+ohmyzsh/ohmyzsh path:plugins/globalias
+romkatv/powerlevel10k kind:fpath
+zsh-users/zsh-autosuggestions
+zsh-users/zsh-syntax-highlighting

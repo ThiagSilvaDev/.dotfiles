@@ -1,2 +1,10 @@
-install_fedora.sh
-.git
+^install_fedora\.sh$
+^\.git$
+^\.gitignore$
+^\.agents$
+^\.codex$
+^\.config/fish/fish_variables$
+^\.config/fish_variables$
+^\.config/completions$
+^\.config/conf\.d$
+^\.config/functions$
